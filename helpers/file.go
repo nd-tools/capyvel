@@ -21,7 +21,7 @@ import (
 // File represents a file handler with a specific configuration.
 type File struct {
 	fp     providerContract.File // The file provider (e.g., storage service).
-	config *FileConfig           // Configuration for file handling.
+	Config *FileConfig           // Configuration for file handling.
 }
 
 // FileConfig contains configuration options for file handling.
@@ -92,18 +92,18 @@ func NewFile(fp providerContract.File, config FileConfig) *File {
 	}
 	return &File{
 		fp:     fp,
-		config: &config,
+		Config: &config,
 	}
 }
 
 // ValidateParams checks if the folder and ID match the configuration parameters.
 func (f *File) ValidateParams(id, folder string) bool {
-	return f.config.Folder == strings.ReplaceAll(folder, " ", "") && f.config.ID == strings.ReplaceAll(id, " ", "")
+	return f.Config.Folder == strings.ReplaceAll(folder, " ", "") && f.Config.ID == strings.ReplaceAll(id, " ", "")
 }
 
 // GenerateUrl generates the URL to access the file with the specified name.
 func (f *File) GenerateUrl(fileName string) string {
-	return fmt.Sprintf("%s/%s?folder=%s&fileName=%s", f.config.BaseUrl, f.config.ID, f.config.Folder, fileName)
+	return fmt.Sprintf("%s/%s?folder=%s&fileName=%s", f.Config.BaseUrl, f.Config.ID, f.Config.Folder, fileName)
 }
 
 // SaveFile saves the provided file to the configured path, applying compression if necessary.
@@ -119,8 +119,8 @@ func (f *File) SaveFile(file *multipart.FileHeader, fileName string) (string, er
 
 	// Apply compression if configured.
 	var fileReader io.Reader = src
-	if f.config.DefaultCompression != nil {
-		compressedFileReader, newExt, err := f.config.DefaultCompression(src)
+	if f.Config.DefaultCompression != nil {
+		compressedFileReader, newExt, err := f.Config.DefaultCompression(src)
 		if err != nil {
 			return "", fmt.Errorf("%w: %v", ErrFileCompressionFailed, err)
 		}
@@ -131,7 +131,7 @@ func (f *File) SaveFile(file *multipart.FileHeader, fileName string) (string, er
 	}
 
 	// Define the file path to save the file.
-	path := fmt.Sprintf("%s/%s", f.config.Path, fileName+ext)
+	path := fmt.Sprintf("%s/%s", f.Config.Path, fileName+ext)
 	// Save the file to the specified path.
 	if err := f.fp.SaveFile(fileReader, path); err != nil {
 		return "", fmt.Errorf("%w: %v", ErrFileSaveFailed, err)
@@ -143,13 +143,13 @@ func (f *File) SaveFile(file *multipart.FileHeader, fileName string) (string, er
 
 // Read retrieves the file for the specified file name.
 func (f *File) Read(fileName string) (io.ReadCloser, error) {
-	path := fmt.Sprintf("%s/%s", f.config.Path, fileName)
+	path := fmt.Sprintf("%s/%s", f.Config.Path, fileName)
 	return f.fp.ReadFile(path)
 }
 
 // Delete deletes the file for the specified file name.
 func (f *File) Delete(fileName string) error {
-	path := fmt.Sprintf("%s/%s", f.config.Path, fileName)
+	path := fmt.Sprintf("%s/%s", f.Config.Path, fileName)
 	return f.fp.DeleteFile(path)
 }
 
