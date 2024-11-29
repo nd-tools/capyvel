@@ -2,15 +2,12 @@ package router
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/gookit/color"
-	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-isatty"
 	middlewareContract "github.com/nd-tools/capyvel/contracts/middlewares"
 	routerContract "github.com/nd-tools/capyvel/contracts/router"
 	"github.com/nd-tools/capyvel/foundation"
@@ -19,82 +16,143 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const (
+	DefaultGroupPath                   = "/api"
+	ErrInvalidTimezone                 = "Invalid app.timezone configuration: %v"
+	ErrGroupNameRequired               = "Group name is required"
+	ErrIncorrectHTTPMethod             = "Invalid HTTP method: %s"
+	ErrPortMisconfigured               = "HTTP port is misconfigured"
+	ErrTLSConfigError                  = "Error in TLS configuration"
+	ErrTLSCertPathNotFound             = "TLS certificate path not found"
+	ErrTLSKeyPathNotFound              = "TLS key path not found"
+	ErrMissingOrInvalidTimezone        = "app.timezone missing or invalid"
+	ErrInvalidTimezoneConfig           = "Invalid timezone configuration: %v"
+	ErrMissingOrInvalidAppEnv          = "App environment configuration is invalid or missing"
+	ErrMissingOrInvalidDebugConfig     = "Debug configuration is invalid or missing"
+	ErrMissingOrInvalidCORSMethods     = "CORS allowed methods configuration is invalid or missing"
+	ErrMissingOrInvalidCORSOrigins     = "CORS allowed origins configuration is invalid or missing"
+	ErrMissingOrInvalidCORSHeaders     = "CORS allowed headers configuration is invalid or missing"
+	ErrMissingOrInvalidCORSCredentials = "CORS supports credentials configuration is invalid or missing"
+)
+
+// RouterManager is the global router manager instance.
 var (
 	RouterManager Router
 )
 
+// Router manages the Gin engine, default group, and middleware stack.
 type Router struct {
-	Engine      *gin.Engine
-	Default     *gin.RouterGroup
-	Middlewares []middlewareContract.Middleware
+	engine       *gin.Engine                     // The Gin engine instance
+	defaultRoute *gin.RouterGroup                // Default API route group
+	middlewares  []middlewareContract.Middleware // List of registered middlewares
 }
 
+// RouteOptions defines configuration options for registering routes.
 type RouteOptions struct {
-	BasePath                  string
-	GroupName                 string
-	DontUseDefaultMiddlewares bool
-	DisableLog                bool
-	Middlewares               []middlewareContract.Middleware
-	Resource                  *routerContract.Resource
+	BasePath                  string                          // Base path for the route group
+	GroupName                 string                          // Name of the route group
+	DontUseDefaultMiddlewares bool                            // Whether to skip default middlewares
+	Middlewares               []middlewareContract.Middleware // Middlewares specific to this route
+	Resource                  *routerContract.Resource        // Resource configuration for CRUD endpoints
 }
 
+// RouteOptionFunction defines a single function route configuration.
 type RouteOptionFunction struct {
-	GroupName                 string
-	PrefixName                string
-	DontUseDefaultMiddlewares bool
-	HttpMethod                string
-	Function                  func(*gin.Context)
+	PrefixName                string                          // Prefix for the route path
+	DontUseDefaultMiddlewares bool                            // Whether to skip default middlewares
+	HttpMethod                string                          // HTTP method (GET, POST, etc.)
+	Function                  func(*gin.Context)              // Function handler for the route
+	Middlewares               []middlewareContract.Middleware // Middlewares specific to this route
 }
 
+// Boot initializes the router, CORS, and app configuration.
 func Boot() {
 	if name, ok := foundation.App.Config.Get("app.timezone", "America/Mexico_City").(string); ok {
 		location, err := time.LoadLocation(name)
 		if err != nil {
-			color.Redln("error en la configuracion app.timezone : ", err)
+			color.Redf(ErrInvalidTimezoneConfig, err)
 			os.Exit(1)
 		}
 		time.Local = location
+	} else {
+		color.Redln(ErrMissingOrInvalidTimezone)
+		os.Exit(1)
 	}
 	if mode, ok := foundation.App.Config.Get("app.env", "dev").(string); ok && strings.EqualFold(mode, "release") {
 		gin.SetMode(gin.ReleaseMode)
+	} else if !ok {
+		color.Redln(ErrMissingOrInvalidAppEnv)
+		os.Exit(1)
 	}
-	var router = gin.New()
+	router := gin.New()
 	if debug, ok := foundation.App.Config.Get("app.debug", true).(bool); ok && debug {
-		router.Use(CustomLogger(colorable.NewColorableStdout()), gin.Recovery())
+		router.Use(gin.Recovery())
+	} else if !ok {
+		color.Redln(ErrMissingOrInvalidDebugConfig)
+		os.Exit(1)
+	}
+	config := cors.DefaultConfig()
+	if methods, ok := foundation.App.Config.Get("cors.allowed_methods", []string{"*"}).([]string); ok {
+		config.AllowMethods = methods
+	} else {
+		color.Redln(ErrMissingOrInvalidCORSMethods)
+		os.Exit(1)
 	}
 
-	config := cors.DefaultConfig()
-	config.AllowMethods = foundation.App.Config.Get("cors.allowed_methods", []string{"*"}).([]string)
-	config.AllowOrigins = foundation.App.Config.Get("cors.allowed_origins", []string{"*"}).([]string)
-	config.AllowHeaders = foundation.App.Config.Get("cors.allowed_headers", []string{"*"}).([]string)
-	config.AllowCredentials = foundation.App.Config.Get("cors.supports_credentials", false).(bool)
+	if origins, ok := foundation.App.Config.Get("cors.allowed_origins", []string{"*"}).([]string); ok {
+		config.AllowOrigins = origins
+	} else {
+		color.Redln(ErrMissingOrInvalidCORSOrigins)
+		os.Exit(1)
+	}
+
+	if headers, ok := foundation.App.Config.Get("cors.allowed_headers", []string{"*"}).([]string); ok {
+		config.AllowHeaders = headers
+	} else {
+		color.Redln(ErrMissingOrInvalidCORSHeaders)
+		os.Exit(1)
+	}
+
+	if credentials, ok := foundation.App.Config.Get("cors.supports_credentials", false).(bool); ok {
+		config.AllowCredentials = credentials
+	} else {
+		color.Redln(ErrMissingOrInvalidCORSCredentials)
+		os.Exit(1)
+	}
+
 	router.Use(cors.New(config))
 
-	RouterManager.Engine = router
-	RouterManager.Default = RouterManager.Engine.Group("/api")
+	RouterManager.engine = router
+	RouterManager.defaultRoute = RouterManager.engine.Group(DefaultGroupPath)
 }
 
+// RegisterDefaultsMiddlewares registers a list of default middlewares.
 func (router *Router) RegisterDefaultsMiddlewares(middlewares []middlewareContract.Middleware) {
-	router.Middlewares = append(router.Middlewares, middlewares...)
+	router.middlewares = append(router.middlewares, middlewares...)
 }
 
+// RegisterResource registers a set of CRUD routes for a resource controller.
 func (router *Router) RegisterResource(option RouteOptions, controller routerContract.ResourceController) {
-	r := RouterManager.Default
+	r := RouterManager.defaultRoute
 	if option.BasePath != "" {
-		r = router.Engine.Group(option.BasePath)
+		r = router.engine.Group(option.BasePath)
 	}
+	if option.GroupName == "" {
+		color.Redln(ErrGroupNameRequired)
+		os.Exit(1)
+	}
+
 	r = r.Group(option.GroupName)
+
 	if !option.DontUseDefaultMiddlewares {
-		for _, middleware := range router.Middlewares {
+		for _, middleware := range router.middlewares {
 			r.Use(middleware.Middleware)
 		}
 	}
+
 	for _, middleware := range option.Middlewares {
 		r.Use(middleware.Middleware)
 	}
-	// if option.DisableLog {
-	// 	// r.Use(NoLoggingMiddleware())
-	// }
 
 	if option.Resource == nil {
 		r.GET("/", controller.Index)
@@ -121,134 +179,83 @@ func (router *Router) RegisterResource(option RouteOptions, controller routerCon
 	}
 }
 
+// RegisterFunctions registers custom routes with specific handlers and HTTP methods.
 func (router *Router) RegisterFunctions(option RouteOptions, optionsFunctions []RouteOptionFunction) {
-	r := RouterManager.Default
+	r := RouterManager.defaultRoute
 	if option.BasePath != "" {
-		r = router.Engine.Group(option.BasePath)
+		r = router.engine.Group(option.BasePath)
+	}
+	if option.GroupName == "" {
+		color.Redln(ErrGroupNameRequired)
+		os.Exit(1)
 	}
 	r = r.Group(option.GroupName)
-
-	if option.GroupName != "" {
-		r = RouterManager.Default.Group(option.GroupName)
-	}
-	// if option.DisableLog {
-	// 	// r.Use(NoLoggingMiddleware())
-	// }
 	for _, optionFunction := range optionsFunctions {
 		httpMethod := optionFunction.HttpMethod
 		function := optionFunction.Function
 		prefixName := optionFunction.PrefixName
+		if prefixName != "" {
+			prefixName = "/" + prefixName
+		}
+		switch httpMethod {
+		case http.MethodGet:
+			r.GET(prefixName, function)
+		case http.MethodPost:
+			r.POST(prefixName, function)
+		case http.MethodPut:
+			r.PUT(prefixName, function)
+		case http.MethodDelete:
+			r.DELETE(prefixName, function)
+		case http.MethodOptions:
+			r.OPTIONS(prefixName, function)
+		default:
+			color.Redf(ErrIncorrectHTTPMethod, httpMethod)
+			os.Exit(1)
+		}
 		if !option.DontUseDefaultMiddlewares && !optionFunction.DontUseDefaultMiddlewares {
-			for _, middleware := range router.Middlewares {
+			for _, middleware := range router.middlewares {
 				r.Use(middleware.Middleware)
 			}
 			for _, middleware := range option.Middlewares {
 				r.Use(middleware.Middleware)
 			}
 		}
-
-		switch httpMethod {
-
-		case http.MethodGet:
-			r.GET("/"+prefixName, function)
-		case http.MethodPost:
-			r.POST("/"+prefixName, function)
-		case http.MethodPut:
-			r.PUT("/"+prefixName, function)
-		case http.MethodDelete:
-			r.DELETE("/"+prefixName, function)
-		case http.MethodOptions:
-			r.OPTIONS("/"+prefixName, function)
-		default:
-			color.Redf("handler metodo incorrecto %s", httpMethod)
-			os.Exit(1)
+		for _, middleware := range optionFunction.Middlewares {
+			r.Use(middleware.Middleware)
 		}
 	}
 }
 
+// Run starts the Gin server on the configured port with optional TLS.
 func (router *Router) Run() *gin.Engine {
 	config := foundation.App.Config
 	port, ok := config.Get("http.port", 8080).(int)
 	if !ok {
-		color.Redf("puerto mal declarado")
+		color.Redln(ErrPortMisconfigured)
 		os.Exit(1)
 	}
 	addr := fmt.Sprintf(":%d", port)
-	if config.Get("http.tls.enable", false).(bool) {
-		certFile := config.Get("http.tls.ssl.cert", "").(string)
-		keyFile := config.Get("http.tls.ssl.key", "").(string)
-		RouterManager.Engine.RunTLS(addr, certFile, keyFile)
+	runtls, ok := config.Get("http.tls.enable", false).(bool)
+	if !ok {
+		color.Redln(ErrTLSConfigError)
+		os.Exit(1)
+	}
+
+	if runtls {
+		certFile, ok := config.Get("http.tls.ssl.cert", "").(string)
+		if !ok {
+			color.Redln(ErrTLSCertPathNotFound)
+			os.Exit(1)
+		}
+
+		keyFile, ok := config.Get("http.tls.ssl.key", "").(string)
+		if !ok {
+			color.Redln(ErrTLSKeyPathNotFound)
+			os.Exit(1)
+		}
+		RouterManager.engine.RunTLS(addr, certFile, keyFile)
 	} else {
-		RouterManager.Engine.Run(addr)
+		RouterManager.engine.Run(addr)
 	}
-	return RouterManager.Engine
-}
-
-const (
-	green   = "\033[32m"
-	yellow  = "\033[33m"
-	red     = "\033[31m"
-	blue    = "\033[34m"
-	magenta = "\033[35m"
-	cyan    = "\033[36m"
-	reset   = "\033[0m"
-)
-
-// CustomLogger retorna un middleware que escribe logs coloreados
-func CustomLogger(out io.Writer) gin.HandlerFunc {
-	isTerm := isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
-	if !isTerm {
-		return gin.Logger()
-	}
-
-	return func(c *gin.Context) {
-		start := time.Now()
-		path := c.Request.URL.Path
-		raw := c.Request.URL.RawQuery
-
-		c.Next()
-
-		end := time.Now()
-		latency := end.Sub(start)
-		statusCode := c.Writer.Status()
-
-		var statusColor, methodColor string
-		switch {
-		case statusCode >= 200 && statusCode < 300:
-			statusColor = green
-		case statusCode >= 300 && statusCode < 400:
-			statusColor = cyan
-		case statusCode >= 400 && statusCode < 500:
-			statusColor = yellow
-		default:
-			statusColor = red
-		}
-
-		switch c.Request.Method {
-		case "GET":
-			methodColor = blue
-		case "POST":
-			methodColor = cyan
-		case "PUT":
-			methodColor = yellow
-		case "DELETE":
-			methodColor = red
-		default:
-			methodColor = reset
-		}
-
-		if raw != "" {
-			path = path + "?" + raw
-		}
-
-		// Aquí pintamos el prefijo y la fecha en azul
-		fmt.Fprintf(out, "%s[GIN] %v%s |%s %3d %s| %13v | %15s |%s %-7s %s %#v\n",
-			blue, end.Format("2006/01/02 - 15:04:05"), reset,
-			statusColor, statusCode, reset,
-			latency,
-			c.ClientIP(),
-			methodColor, c.Request.Method, reset,
-			path,
-		)
-	}
+	return RouterManager.engine
 }
