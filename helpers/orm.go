@@ -37,6 +37,8 @@ type (
 		ScanObj           bool
 		Db                *gorm.DB
 		Limit             int
+		DefaultOrderBy    string
+		DefaultOrderDesc  bool
 		DisablePagination bool
 		SearchFields      []structaudit.FieldInfo
 		OrderFields       []structaudit.FieldInfo
@@ -244,28 +246,6 @@ func (orm *Orm) Update(ctx *gin.Context, obj any, config UpdateConfig) (*respons
 			Code: http.StatusInternalServerError,
 		}
 	}
-	// function, err := structaudit.RetrieveFunctionResult(objType, "TableName")
-	// if err != nil {
-	// 	return nil, &responses.Error{
-	// 		ErrorDetail: responses.ErrorDetail{
-	// 			Message: "error finding model's table name",
-	// 			Error:   err,
-	// 			Type:    responses.TypeDB,
-	// 		},
-	// 		Code: http.StatusInternalServerError,
-	// 	}
-	// }
-	// tableName, ok := function.(string)
-	// if !ok {
-	// 	return nil, &responses.Error{
-	// 		ErrorDetail: responses.ErrorDetail{
-	// 			Message: "error finding model's table name",
-	// 			Details: "could not convert to string",
-	// 			Type:    responses.TypeDB,
-	// 		},
-	// 		Code: http.StatusInternalServerError,
-	// 	}
-	// }
 	fieldInfo, err := structaudit.FindFieldInfoByTag(objType, "gorm", "primaryKey")
 	if err != nil {
 		return nil, &responses.Error{
@@ -450,6 +430,8 @@ func (orm *Orm) List(ctx *gin.Context, obj any, config ListConfig) (*responses.A
 				Code: http.StatusBadRequest,
 			}
 		}
+	} else if config.DefaultOrderBy != "" {
+		db = db.Order(clause.OrderByColumn{Column: clause.Column{Name: config.DefaultOrderBy}, Desc: config.DefaultOrderDesc})
 	}
 
 	if config.Limit == 0 {

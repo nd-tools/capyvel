@@ -11,7 +11,6 @@ type Resource struct {
 }
 
 type ResourceController interface {
-	// Resources() Resource
 	Index(ctx *gin.Context)
 	Store(ctx *gin.Context)
 	Show(ctx *gin.Context)
