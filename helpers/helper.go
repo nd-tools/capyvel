@@ -64,13 +64,6 @@ func BirthDateToAge(birthdate time.Time) (int, error) {
 	return age, nil
 }
 
-// IsValidUUID checks if a string is a valid UUID.
-// Returns: error
-func IsValidUUID(id string) error {
-	// _, err := uuid.Parse(id)
-	return nil
-}
-
 // IsValidInt checks if a string is a valid integer.
 // Returns: error
 func IsValidInt(id string) error {

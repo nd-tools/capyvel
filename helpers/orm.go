@@ -50,6 +50,7 @@ type (
 		WithAttach  bool
 		DisableBind bool
 		Batches     int
+		BatchesSize int
 	}
 	UpdateConfig struct {
 		BindMode    string
@@ -57,6 +58,7 @@ type (
 		WithAttach  bool
 		DisableBind bool
 		ColumnKey   string
+		BatchesSize int
 	}
 	DeleteConfig struct {
 		ColumnKey  string
@@ -98,6 +100,13 @@ func (orm *Orm) Add(ctx *gin.Context, obj any, config AddConfig) (*responses.Api
 	}
 	if !config.WithAttach {
 		db = db.Omit(clause.Associations)
+	} else {
+		db = db.Session(&gorm.Session{FullSaveAssociations: true})
+	}
+	if config.BatchesSize > 0 {
+		db.CreateBatchSize = config.BatchesSize
+	} else {
+		db.CreateBatchSize = -1
 	}
 	if structaudit.GetObjectKind(obj) == reflect.Slice {
 		batches := 20
@@ -281,6 +290,13 @@ func (orm *Orm) Update(ctx *gin.Context, obj any, config UpdateConfig) (*respons
 	}
 	if !config.WithAttach {
 		db = db.Omit(clause.Associations)
+	} else {
+		db = db.Session(&gorm.Session{FullSaveAssociations: true})
+	}
+	if config.BatchesSize > 0 {
+		db.CreateBatchSize = config.BatchesSize
+	} else {
+		db.CreateBatchSize = -1
 	}
 	if err := db.WithContext(ctx).Model(obj).Where(fieldInfo.Name+" = ?", fieldInfo.Value).Updates(obj).Error; err != nil {
 		return nil, &responses.Error{

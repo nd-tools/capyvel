@@ -13,37 +13,10 @@ This project follows a version control scheme based on **Semantic Versioning** (
 - Basic functions implemented.
 - Project structure configured.
   
-### Version History
-
-| Version | Date       | Description                                      |
-|---------|------------|--------------------------------------------------|
-| **v1.0** | Nov 29, 2024 | Initial version of the project. First stable release. |
-| **v0.1** | Nov 10, 2024 | Preliminary version with initial features. |
 
 
-### Usage
-
-Instructions on how to use the project or the tools it contains.
-
-### Contributing
-
-If you'd like to contribute to the project, please follow these steps:
-
-1. Fork the repository.
-2. Create a branch for your changes (`git checkout -b feature/new-feature`).
-3. Make your changes and commit them.
-4. Push your changes to your fork (`git push origin feature/new-feature`).
-5. Create a Pull Request for us to review your changes.
 
 ---
-
-### Explanation of the `README.md`:
-
-- **Versions**: The **Versions** section contains the list of versions for the project, following the versioning scheme. You can add more versions here as you update the project.
-- **Version History**: A table where you can add the version, the date, and a brief description of the changes.
-- **Installation and Usage**: This section contains instructions for other developers to install and use the project.
-- **Contributing**: Includes instructions for other users to contribute to the project.
-- **License**: Links to the license under which the project is distributed (if applicable).
 
 ### How to Add New Versions?
 
@@ -52,7 +25,6 @@ When you want to add a new version, simply commit your changes and use the follo
 ```bash
 git tag -a v1.1 -m "Description of the new version"
 git push origin v1.1
-
 
 
 1. Get a specific version of the package:

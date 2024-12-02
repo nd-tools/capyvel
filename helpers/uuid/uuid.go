@@ -10,36 +10,32 @@ import (
 	"github.com/google/uuid"
 )
 
-// UUID es una estructura que envuelve el tipo uuid.UUID.
 type UUID [16]byte
 
-// New crea una nueva instancia de UUID.
+// New creates a new instance of UUID.
 func New() *UUID {
-	// Genera un nuevo UUID utilizando uuid.New()
 	newUUID := uuid.New()
 	var uuidStruct UUID
 	copy(uuidStruct[:], newUUID[:])
 	return &uuidStruct
 }
 
-// FromString convierte un string en un UUID.
-// Si el UUID es vacío o no válido, devuelve nil.
+// FromString converts a string to a UUID.
+// If the UUID is empty or invalid, it returns nil.
 func FromString(uuidStr string) (*UUID, error) {
 	if uuidStr == "" || uuidStr == "00000000-0000-0000-0000-000000000000" {
-		return nil, nil // Devuelve nil si el UUID es vacío.
+		return nil, nil
 	}
-
 	parsedUUID, err := uuid.Parse(uuidStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid UUID string: %v", err)
 	}
-
-	uid := New() // Crear una nueva instancia usando New()
+	uid := New()
 	copy((*uid)[:], parsedUUID[:])
 	return uid, nil
 }
 
-// IsValid verifica si el string pasado es un UUID válido.
+// IsValid checks if the given string is a valid UUID.
 func IsValid(uuidStr string) error {
 	if uuidStr == "" {
 		return errors.New("UUID string is empty")
@@ -52,9 +48,9 @@ func IsValid(uuidStr string) error {
 	return nil
 }
 
-// Equal verifica si dos valores UUID son iguales.
-// Devuelve true si ambos UUID son iguales o si ambos son nil.
-// Devuelve false si alguno es nil o si no son iguales.
+// Equal checks if two UUID values are equal.
+// Returns true if both UUIDs are equal or both are nil.
+// Returns false if either is nil or if they are not equal.
 func Equal(uuid1, uuid2 *UUID) bool {
 	if uuid1 == nil && uuid2 == nil {
 		return true
@@ -70,7 +66,7 @@ func Equal(uuid1, uuid2 *UUID) bool {
 	return true
 }
 
-// Scan implementa el método Scanner para convertir valores de base de datos a UUID.
+// Scan implements the Scanner interface to convert database values to a UUID.
 func (u *UUID) Scan(value interface{}) error {
 	reverse := func(b []byte) {
 		for i, j := 0, len(b)-1; i < j; i, j = i+1, j-1 {
@@ -111,18 +107,16 @@ func (u *UUID) Scan(value interface{}) error {
 	}
 }
 
-// Value implementa el método driver.Valuer para convertir UUID a un valor que pueda ser almacenado en la base de datos.
+// Value implements the driver.Valuer interface to convert a UUID to a value that can be stored in the database.
 func (u UUID) Value() (driver.Value, error) {
 	reverse := func(b []byte) {
 		for i, j := 0, len(b)-1; i < j; i, j = i+1, j-1 {
 			b[i], b[j] = b[j], b[i]
 		}
 	}
-
 	if u == (UUID{}) {
-		return nil, nil // Devuelve NULL si el UUID es vacío.
+		return nil, nil
 	}
-
 	raw := make([]byte, len(u))
 	copy(raw, u[:])
 
@@ -133,27 +127,24 @@ func (u UUID) Value() (driver.Value, error) {
 	return raw, nil
 }
 
-// String convierte el UUID a su representación en string.
+// String converts the UUID to its string representation.
 func (u UUID) String() string {
 	return fmt.Sprintf("%X-%X-%X-%X-%X", u[0:4], u[4:6], u[6:8], u[8:10], u[10:])
 }
 
-// MarshalText convierte UniqueIdentifier a bytes correspondientes a la representación en hexadecimal.
+// MarshalText converts a UniqueIdentifier to bytes corresponding to its hexadecimal representation.
 func (u UUID) MarshalText() (text []byte, err error) {
 	text = []byte(u.String())
 	return
 }
 
-// UnmarshalJSON convierte una representación en string de UniqueIdentifier a bytes.
+// UnmarshalJSON converts a string representation of a UniqueIdentifier to bytes.
 func (u *UUID) UnmarshalJSON(b []byte) error {
-	// Eliminar las comillas
 	input := strings.Trim(string(b), `"`)
-	// Decodificar
 	bytes, err := hex.DecodeString(strings.Replace(input, "-", "", -1))
 	if err != nil {
 		return err
 	}
-	// Copiar los bytes al UniqueIdentifier
 	copy(u[:], bytes)
 	return nil
 }
