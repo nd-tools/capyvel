@@ -193,42 +193,44 @@ func (router *Router) RegisterFunctions(option RouteOptions, optionsFunctions []
 		os.Exit(1)
 	}
 	r = r.Group(option.GroupName)
+
 	for _, optionFunction := range optionsFunctions {
 		httpMethod := optionFunction.HttpMethod
 		function := optionFunction.Function
 		prefixName := optionFunction.PrefixName
+
 		if prefixName == "" {
 			color.Redf(ErrPrefixRequired, getFunctionName(optionFunction.Function))
 			os.Exit(1)
 		}
-		subr := r.Group("/" + prefixName)
+		fullPath := "/" + prefixName
+		middlewares := []gin.HandlerFunc{}
 		if !option.DontUseDefaultMiddlewares && !optionFunction.DontUseDefaultMiddlewares {
 			for _, middleware := range router.middlewares {
-				subr.Use(middleware.Middleware)
+				middlewares = append(middlewares, middleware.Middleware)
 			}
 			for _, middleware := range option.Middlewares {
-				subr.Use(middleware.Middleware)
+				middlewares = append(middlewares, middleware.Middleware)
 			}
 		}
 		for _, middleware := range optionFunction.Middlewares {
-			subr.Use(middleware.Middleware)
+			middlewares = append(middlewares, middleware.Middleware)
 		}
 		switch httpMethod {
 		case http.MethodGet:
-			subr.GET("", function)
+			r.GET(fullPath, append(middlewares, function)...)
 		case http.MethodPost:
-			subr.POST("", function)
+			r.POST(fullPath, append(middlewares, function)...)
 		case http.MethodPut:
-			subr.PUT("", function)
+			r.PUT(fullPath, append(middlewares, function)...)
 		case http.MethodDelete:
-			subr.DELETE("", function)
+			r.DELETE(fullPath, append(middlewares, function)...)
 		case http.MethodOptions:
-			subr.OPTIONS("", function)
+			r.OPTIONS(fullPath, append(middlewares, function)...)
 		default:
 			color.Redf(ErrIncorrectHTTPMethod, httpMethod)
 			os.Exit(1)
 		}
-		color.Greenf("Registered route: %s %s\n", httpMethod, subr.BasePath())
 	}
 }
 
