@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"reflect"
+	"runtime"
 	"strings"
 	"time"
 
@@ -19,6 +21,7 @@ import (
 const (
 	DefaultGroupPath                   = "/api"
 	ErrInvalidTimezone                 = "Invalid app.timezone configuration: %v"
+	ErrPrefixRequired                  = "Prefix name is required %s"
 	ErrGroupNameRequired               = "Group name is required"
 	ErrIncorrectHTTPMethod             = "Invalid HTTP method: %s"
 	ErrPortMisconfigured               = "HTTP port is misconfigured"
@@ -194,35 +197,38 @@ func (router *Router) RegisterFunctions(option RouteOptions, optionsFunctions []
 		httpMethod := optionFunction.HttpMethod
 		function := optionFunction.Function
 		prefixName := optionFunction.PrefixName
-		if prefixName != "" {
-			prefixName = "/" + prefixName
+		if prefixName == "" {
+			color.Redf(ErrPrefixRequired, getFunctionName(optionFunction.Function))
+			os.Exit(1)
+		}
+		subr := r.Group("/" + prefixName)
+		if !option.DontUseDefaultMiddlewares && !optionFunction.DontUseDefaultMiddlewares {
+			for _, middleware := range router.middlewares {
+				subr.Use(middleware.Middleware)
+			}
+			for _, middleware := range option.Middlewares {
+				subr.Use(middleware.Middleware)
+			}
+		}
+		for _, middleware := range optionFunction.Middlewares {
+			subr.Use(middleware.Middleware)
 		}
 		switch httpMethod {
 		case http.MethodGet:
-			r.GET(prefixName, function)
+			subr.GET("", function)
 		case http.MethodPost:
-			r.POST(prefixName, function)
+			subr.POST("", function)
 		case http.MethodPut:
-			r.PUT(prefixName, function)
+			subr.PUT("", function)
 		case http.MethodDelete:
-			r.DELETE(prefixName, function)
+			subr.DELETE("", function)
 		case http.MethodOptions:
-			r.OPTIONS(prefixName, function)
+			subr.OPTIONS("", function)
 		default:
 			color.Redf(ErrIncorrectHTTPMethod, httpMethod)
 			os.Exit(1)
 		}
-		if !option.DontUseDefaultMiddlewares && !optionFunction.DontUseDefaultMiddlewares {
-			for _, middleware := range router.middlewares {
-				r.Use(middleware.Middleware)
-			}
-			for _, middleware := range option.Middlewares {
-				r.Use(middleware.Middleware)
-			}
-		}
-		for _, middleware := range optionFunction.Middlewares {
-			r.Use(middleware.Middleware)
-		}
+		color.Greenf("Registered route: %s %s\n", httpMethod, subr.BasePath())
 	}
 }
 
@@ -258,4 +264,13 @@ func (router *Router) Run() *gin.Engine {
 		RouterManager.engine.Run(addr)
 	}
 	return RouterManager.engine
+}
+
+func getFunctionName(function interface{}) string {
+	ptr := reflect.ValueOf(function).Pointer()
+	funcInfo := runtime.FuncForPC(ptr)
+	if funcInfo != nil {
+		return funcInfo.Name()
+	}
+	return "unknown"
 }
