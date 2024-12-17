@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/nd-tools/capyvel/helpers/structaudit"
 	"gorm.io/gorm"
@@ -58,20 +59,18 @@ func ScopeSearch(db *gorm.DB, fields []structaudit.FieldInfo, param string) (*go
 	param = CleanText(param)
 	if param != "" {
 		var value = "%" + param + "%"
-		var expr = ""
-		for i, f := range fields {
+		var conditions []string
+		var args []interface{}
+		for _, f := range fields {
 			if f.Name == "" {
 				return db, ErrNameNotValid
 			}
-
-			if i == 0 {
-				expr += fmt.Sprintf("%s LIKE %s", f.Name, value)
-			} else {
-				expr += fmt.Sprintf("OR %s LIKE %s", f.Name, value)
-			}
+			conditions = append(conditions, fmt.Sprintf("%s LIKE ?", f.Name))
+			args = append(args, value)
 		}
-		if expr != "" {
-			db.Where("(?)", expr)
+		if len(conditions) > 0 {
+			expr := strings.Join(conditions, " OR ")
+			db = db.Where(fmt.Sprintf("(%s)", expr), args...)
 		}
 	}
 	return db, nil
