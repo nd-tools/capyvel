@@ -13,6 +13,7 @@ import (
 // Error messages
 var (
 	ErrColumnNotValid = errors.New("the column not valid")
+	ErrNameNotValid   = errors.New("field 'Name' not declared in the configurations")
 )
 
 func ScopeOrder(db *gorm.DB, fields []structaudit.FieldInfo, param string, desc bool) (*gorm.DB, error) {
@@ -57,14 +58,20 @@ func ScopeSearch(db *gorm.DB, fields []structaudit.FieldInfo, param string) (*go
 	param = CleanText(param)
 	if param != "" {
 		var value = "%" + param + "%"
-		var columnExpr = " LIKE ? "
+		var expr = ""
 		for i, f := range fields {
-			columnExprFormatted := fmt.Sprintf("%s %s", f.Name, columnExpr)
-			if i == 0 {
-				db = db.Where(columnExprFormatted, value)
-			} else {
-				db = db.Or(columnExprFormatted, value)
+			if f.Name == "" {
+				return db, ErrNameNotValid
 			}
+
+			if i == 0 {
+				expr += fmt.Sprintf("%s LIKE %s", f.Name, value)
+			} else {
+				expr += fmt.Sprintf("OR %s LIKE %s", f.Name, value)
+			}
+		}
+		if expr != "" {
+			db.Where("(?)", expr)
 		}
 	}
 	return db, nil

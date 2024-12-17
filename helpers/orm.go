@@ -395,10 +395,6 @@ func (orm *Orm) List(ctx *gin.Context, obj any, config ListConfig) (*responses.A
 	if db == nil {
 		db = orm.db
 	}
-	db, err = ScopeSearch(db, config.SearchFields, param.Search)
-	if err != nil {
-		return nil, &responses.Error{ErrorDetail: responses.ErrorDetail{Message: "error en los 'Params query'", Error: err, Type: responses.TypeDB}, Code: http.StatusBadRequest}
-	}
 	for _, filterFunction := range config.FilterFunctions {
 		db, err = filterFunction(ctx, db)
 		if err != nil {
@@ -434,6 +430,9 @@ func (orm *Orm) List(ctx *gin.Context, obj any, config ListConfig) (*responses.A
 		}
 	}
 
+	if config.DefaultOrderBy != "" {
+		db = db.Order(clause.OrderByColumn{Column: clause.Column{Name: config.DefaultOrderBy}, Desc: config.DefaultOrderDesc})
+	}
 	if config.OrderFields != nil {
 		db, err = ScopeOrder(db, config.OrderFields, param.OrderBy, param.OrderDesc)
 		if err != nil {
@@ -446,8 +445,6 @@ func (orm *Orm) List(ctx *gin.Context, obj any, config ListConfig) (*responses.A
 				Code: http.StatusBadRequest,
 			}
 		}
-	} else if config.DefaultOrderBy != "" {
-		db = db.Order(clause.OrderByColumn{Column: clause.Column{Name: config.DefaultOrderBy}, Desc: config.DefaultOrderDesc})
 	}
 
 	if config.Limit == 0 {

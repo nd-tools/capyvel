@@ -20,7 +20,12 @@ type Api struct {
 
 func (api *Api) Error(ctx *gin.Context, e Error) {
 	e.ErrorDetail.LoadDetail()
-	e.Status = 400
+	if e.Code == 0 {
+		e.Status = 500
+	} else {
+		e.Code = 500
+		e.Status = e.Code
+	}
 	e.Success = false
 	ctx.JSON(e.Code, e)
 	ctx.Abort()
