@@ -34,41 +34,47 @@ type FilterFunc func(ctx *gin.Context, db *gorm.DB) (*gorm.DB, error)
 // Configuration structs for various ORM operations
 type (
 	ListConfig struct {
-		ScanObj           bool
 		Db                *gorm.DB
 		Limit             int
 		DefaultOrderBy    string
 		DefaultOrderDesc  bool
+		ScanObj           bool
 		DisablePagination bool
 		SearchFields      []structaudit.FieldInfo
 		OrderFields       []structaudit.FieldInfo
 		FilterFunctions   []FilterFunc
 	}
 	AddConfig struct {
-		BindMode    string
 		Db          *gorm.DB
+		BindMode    string
 		WithAttach  bool
 		DisableBind bool
 		Batches     int
 		BatchesSize int
 	}
 	UpdateConfig struct {
-		BindMode    string
-		Db          *gorm.DB
-		WithAttach  bool
-		DisableBind bool
-		ColumnKey   string
-		BatchesSize int
+		Db                   *gorm.DB
+		BindMode             string
+		ColumnKey            string
+		KeyParam             string
+		BatchesSize          int
+		WithAttach           bool
+		DisableBind          bool
+		DisableValidationKey bool
 	}
 	DeleteConfig struct {
-		ColumnKey  string
-		Db         *gorm.DB
-		SoftDelete bool
+		Db                   *gorm.DB
+		ColumnKey            string
+		KeyParam             string
+		SoftDelete           bool
+		DisableValidationKey bool
 	}
 	GetConfig struct {
-		ColumnKey        string
-		DisableRelations bool
-		Db               *gorm.DB
+		Db                   *gorm.DB
+		ColumnKey            string
+		KeyParam             string
+		DisableRelations     bool
+		DisableValidationKey bool
 	}
 	OrmParams struct {
 		Relations []string `form:"r,omitempty"`
@@ -197,14 +203,20 @@ func (orm *Orm) Get(ctx *gin.Context, obj any, config GetConfig) (*responses.Api
 		}
 		fieldInfo = f
 	}
-	if err := structaudit.ValidateFieldData(fieldInfo, ctx.Param("id")); err != nil {
-		return nil, &responses.Error{
-			ErrorDetail: responses.ErrorDetail{
-				Message: "error validating ID parameter",
-				Error:   err,
-				Type:    responses.TypeDB,
-			},
-			Code: http.StatusBadRequest,
+	if !config.DisableValidationKey {
+		keyParam := "id"
+		if config.KeyParam != "" {
+			keyParam = config.KeyParam
+		}
+		if err := structaudit.ValidateFieldData(fieldInfo, ctx.Param(keyParam)); err != nil {
+			return nil, &responses.Error{
+				ErrorDetail: responses.ErrorDetail{
+					Message: "error validating ID parameter",
+					Error:   err,
+					Type:    responses.TypeDB,
+				},
+				Code: http.StatusBadRequest,
+			}
 		}
 	}
 	if !config.DisableRelations {
@@ -278,14 +290,20 @@ func (orm *Orm) Update(ctx *gin.Context, obj any, config UpdateConfig) (*respons
 			}
 		}
 	}
-	if err := structaudit.ValidateFieldData(fieldInfo, ctx.Param("id")); err != nil {
-		return nil, &responses.Error{
-			ErrorDetail: responses.ErrorDetail{
-				Message: "error validating ID parameter",
-				Error:   err,
-				Type:    responses.TypeDB,
-			},
-			Code: http.StatusBadRequest,
+	if !config.DisableValidationKey {
+		keyParam := "id"
+		if config.KeyParam != "" {
+			keyParam = config.KeyParam
+		}
+		if err := structaudit.ValidateFieldData(fieldInfo, ctx.Param(keyParam)); err != nil {
+			return nil, &responses.Error{
+				ErrorDetail: responses.ErrorDetail{
+					Message: "error validating ID parameter",
+					Error:   err,
+					Type:    responses.TypeDB,
+				},
+				Code: http.StatusBadRequest,
+			}
 		}
 	}
 	if !config.WithAttach {
@@ -339,15 +357,20 @@ func (orm *Orm) Delete(ctx *gin.Context, obj any, config DeleteConfig) (*respons
 			Code: http.StatusInternalServerError,
 		}
 	}
-
-	if err := structaudit.ValidateFieldData(fieldInfo, ctx.Param("id")); err != nil {
-		return nil, &responses.Error{
-			ErrorDetail: responses.ErrorDetail{
-				Message: "error validating ID parameter",
-				Error:   err,
-				Type:    responses.TypeDB,
-			},
-			Code: http.StatusBadRequest,
+	if !config.DisableValidationKey {
+		keyParam := "id"
+		if config.KeyParam != "" {
+			keyParam = config.KeyParam
+		}
+		if err := structaudit.ValidateFieldData(fieldInfo, ctx.Param(keyParam)); err != nil {
+			return nil, &responses.Error{
+				ErrorDetail: responses.ErrorDetail{
+					Message: "error validating ID parameter",
+					Error:   err,
+					Type:    responses.TypeDB,
+				},
+				Code: http.StatusBadRequest,
+			}
 		}
 	}
 	if config.SoftDelete {
