@@ -6,74 +6,87 @@ import (
 	"gorm.io/gorm"
 )
 
+// Constants for error types
 const (
-	TypeDB     = "DB"
-	TypeBind   = "BIND"
-	TypeUnknow = "UNKNOW"
+	TypeDB      = "DB"      // Represents database-related errors
+	TypeBind    = "BIND"    // Represents binding-related errors
+	TypeUnknown = "UNKNOWN" // Represents unknown error types
 )
 
+// Struct representing detailed error information
 type ErrorDetail struct {
-	Error   error  `json:"-"`
-	Code    int    `json:"code,omitempty"`
-	Type    string `json:"type,omitempty"`
-	Key     string `json:"key,omitempty"`
-	Message string `json:"message,omitempty"`
-	Details string `json:"details,omitempty"`
+	Error   error  `json:"-"`                 // Actual error (not serialized in JSON)
+	Type    string `json:"type,omitempty"`    // Type of error (e.g., DB, BIND, UNKNOWN)
+	Message string `json:"message,omitempty"` // Error message for the client
+	Details string `json:"details,omitempty"` // Translated or detailed error message
 }
 
+// Struct representing a complete error response
 type Error struct {
-	ErrorDetail ErrorDetail `json:"error"`
-	Status      int         `json:"status"`
-	Code        int         `json:"-"`
-	Success     bool        `json:"success"`
+	ErrorDetail ErrorDetail `json:"error"`   // Detailed error information
+	Status      int         `json:"status"`  // HTTP status code
+	Code        int         `json:"-"`       // Internal HTTP code (not serialized in JSON)
+	Success     bool        `json:"success"` // Indicates whether the request was successful
 }
 
+// Method to load or translate the error details if not already defined
 func (e *ErrorDetail) LoadDetail() {
 	if e.Details == "" {
-		var errorTraducido string
+		var translatedError string
 		if e.Error != nil {
 			switch e.Type {
 			case TypeDB:
-				errorTraducido = TraducirErrorDB(e.Error)
+				// Translate database-related errors
+				translatedError = TranslateDBError(e.Error)
 			case TypeBind:
-				errorTraducido = TraducirBind(e.Error)
+				// Translate binding-related errors
+				translatedError = TranslateBindError(e.Error)
 			default:
-				errorTraducido = e.Error.Error()
+				// Use the default error message
+				translatedError = e.Error.Error()
 			}
 		} else {
-			errorTraducido = "Error no definido"
+			// Default message when no specific error is defined
+			translatedError = "Undefined error"
 		}
-		e.Details = errorTraducido
+		e.Details = translatedError
 	}
+
+	// If the type is neither DB nor BIND, set it to UNKNOWN
 	if e.Type != TypeDB && e.Type != TypeBind {
-		e.Type = TypeUnknow
+		e.Type = TypeUnknown
 	}
 }
 
-func TraducirErrorDB(err error) string {
+// Function to translate database-related errors
+func TranslateDBError(err error) string {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return "Registro no encontrado"
+		return "Record not found"
 	} else if errors.Is(err, gorm.ErrInvalidTransaction) {
-		return "Transacción inválida"
+		return "Invalid transaction"
 	} else if errors.Is(err, gorm.ErrNotImplemented) {
-		return "Función no implementada"
+		return "Function not implemented"
 	} else if errors.Is(err, gorm.ErrMissingWhereClause) {
-		return "Falta cláusula WHERE"
+		return "Missing WHERE clause"
 	} else if errors.Is(err, gorm.ErrUnsupportedRelation) {
-		return "Relación no soportada"
+		return "Unsupported relation"
 	} else if errors.Is(err, gorm.ErrPrimaryKeyRequired) {
-		return "Se requiere clave primaria"
+		return "Primary key required"
 	} else if errors.Is(err, gorm.ErrModelValueRequired) {
-		return "Se requiere valor del modelo"
+		return "Model value required"
 	} else if errors.Is(err, gorm.ErrInvalidData) {
-		return "Datos inválidos"
+		return "Invalid data"
 	} else if errors.Is(err, gorm.ErrDuplicatedKey) {
-		return "Clave duplicada"
+		return "Duplicated key"
 	}
+	// Default to returning the original error message
 	return err.Error()
 }
 
-func TraducirBind(err error) string {
+// Function to translate binding-related errors
+func TranslateBindError(err error) string {
+	// Custom logic for translating binding-related errors can be added here
+	// Example:
 	// if errGin, ok := err.(gin.Error); !ok {
 	// }
 	return err.Error()

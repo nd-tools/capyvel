@@ -70,6 +70,7 @@ type RouteOptionFunction struct {
 
 // Boot initializes the router, CORS, and app configuration.
 func Boot() {
+	// Set the timezone for the application
 	if name, ok := foundation.App.Config.Get("app.timezone", "America/Mexico_City").(string); ok {
 		location, err := time.LoadLocation(name)
 		if err != nil {
@@ -81,19 +82,27 @@ func Boot() {
 		color.Redln(ErrMissingOrInvalidTimezone)
 		os.Exit(1)
 	}
+
+	// Set the Gin mode based on the app environment
 	if mode, ok := foundation.App.Config.Get("app.env", "dev").(string); ok && strings.EqualFold(mode, "release") {
 		gin.SetMode(gin.ReleaseMode)
 	} else if !ok {
 		color.Redln(ErrMissingOrInvalidAppEnv)
 		os.Exit(1)
 	}
+
+	// Create a new Gin engine
 	router := gin.New()
+
+	// Enable recovery middleware in debug mode
 	if debug, ok := foundation.App.Config.Get("app.debug", true).(bool); ok && debug {
 		router.Use(gin.Recovery())
 	} else if !ok {
 		color.Redln(ErrMissingOrInvalidDebugConfig)
 		os.Exit(1)
 	}
+
+	// Configure CORS settings
 	config := cors.DefaultConfig()
 	if methods, ok := foundation.App.Config.Get("cors.allowed_methods", []string{"*"}).([]string); ok {
 		config.AllowMethods = methods
@@ -125,8 +134,34 @@ func Boot() {
 
 	router.Use(cors.New(config))
 
+	// Add a logger middleware to log incoming requests
+	router.Use(requestLoggerMiddleware())
+
 	RouterManager.engine = router
 	RouterManager.defaultRoute = RouterManager.engine.Group(DefaultGroupPath)
+}
+
+// requestLoggerMiddleware logs all incoming requests with method, path, and timestamp
+func requestLoggerMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		path := c.Request.URL.Path
+		method := c.Request.Method
+
+		// Process the request
+		c.Next()
+
+		// Log the request details
+		duration := time.Since(start)
+		statusCode := c.Writer.Status()
+		fmt.Printf("[%s] %s %s %d %s\n",
+			start.Format("2006-01-02 15:04:05"),
+			method,
+			path,
+			statusCode,
+			duration,
+		)
+	}
 }
 
 // RegisterDefaultsMiddlewares registers a list of default middlewares.
@@ -268,6 +303,7 @@ func (router *Router) Run() *gin.Engine {
 	return RouterManager.engine
 }
 
+// getFunctionName returns the name of a given function.
 func getFunctionName(function interface{}) string {
 	ptr := reflect.ValueOf(function).Pointer()
 	funcInfo := runtime.FuncForPC(ptr)

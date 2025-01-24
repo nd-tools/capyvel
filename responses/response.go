@@ -6,14 +6,10 @@ var (
 
 func Boot() {
 	Handler = &Response{
-		Api:  Api{},
-		File: File{},
-		Auth: Auth{},
+		Api: Api{},
 	}
 }
 
 type Response struct {
-	Api  Api
-	File File
-	Auth Auth
+	Api Api
 }

@@ -3,7 +3,6 @@ package helpers
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/nd-tools/capyvel/helpers/structaudit"
@@ -31,18 +30,6 @@ func ScopeOrder(db *gorm.DB, fields []structaudit.FieldInfo, param string, desc 
 			db = db.Order(clause.OrderByColumn{Column: clause.Column{Name: field.Name}, Desc: desc})
 		} else {
 			return db, ErrColumnNotValid
-		}
-	}
-	return db, nil
-}
-
-func ScopeRelations(db *gorm.DB, relations []string, objType reflect.Type) (*gorm.DB, error) {
-	if len(relations) > 0 {
-		for _, relation := range relations {
-			if _, err := structaudit.LocateFieldType(objType, relation, -1); err != nil {
-				return nil, err
-			}
-			db = db.Preload(relation)
 		}
 	}
 	return db, nil

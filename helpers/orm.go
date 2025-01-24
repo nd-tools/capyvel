@@ -77,12 +77,11 @@ type (
 		DisableValidationKey bool
 	}
 	OrmParams struct {
-		Relations []string `form:"r,omitempty"`
-		Search    string   `form:"search,omitempty"`
-		OrderBy   string   `form:"orderBy,omitempty"`
-		OrderDesc bool     `form:"orderDesc,omitempty"`
-		Page      int      `form:"page,omitempty"`
-		PageSize  int      `form:"pageSize,omitempty"`
+		Search    string `form:"search,omitempty"`
+		OrderBy   string `form:"orderBy,omitempty"`
+		OrderDesc bool   `form:"orderDesc,omitempty"`
+		Page      int    `form:"page,omitempty"`
+		PageSize  int    `form:"pageSize,omitempty"`
 	}
 )
 
@@ -212,19 +211,6 @@ func (orm *Orm) Get(ctx *gin.Context, obj any, config GetConfig) (*responses.Api
 			return nil, &responses.Error{
 				ErrorDetail: responses.ErrorDetail{
 					Message: "error validating ID parameter",
-					Error:   err,
-					Type:    responses.TypeDB,
-				},
-				Code: http.StatusBadRequest,
-			}
-		}
-	}
-	if !config.DisableRelations {
-		db, err = ScopeRelations(db, param.Relations, objType)
-		if err != nil {
-			return nil, &responses.Error{
-				ErrorDetail: responses.ErrorDetail{
-					Message: "error loading relations",
 					Error:   err,
 					Type:    responses.TypeDB,
 				},
@@ -454,7 +440,18 @@ func (orm *Orm) List(ctx *gin.Context, obj any, config ListConfig) (*responses.A
 	}
 
 	if config.DefaultOrderBy != "" {
-		db = db.Order(clause.OrderByColumn{Column: clause.Column{Name: config.DefaultOrderBy}, Desc: config.DefaultOrderDesc})
+		defaultOrderFieldRepeated := false
+		for _, orderField := range config.OrderFields {
+			if orderField.Name == config.DefaultOrderBy && param.OrderBy == config.DefaultOrderBy {
+				defaultOrderFieldRepeated = true
+			}
+		}
+		if !defaultOrderFieldRepeated {
+			db = db.Order(clause.OrderByColumn{
+				Column: clause.Column{Name: config.DefaultOrderBy},
+				Desc:   config.DefaultOrderDesc,
+			})
+		}
 	}
 	if config.OrderFields != nil {
 		db, err = ScopeOrder(db, config.OrderFields, param.OrderBy, param.OrderDesc)

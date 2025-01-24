@@ -1,6 +1,6 @@
 module github.com/nd-tools/capyvel
 
-go 1.19
+go 1.23
 
 require (
 	github.com/gin-contrib/cors v1.7.2
