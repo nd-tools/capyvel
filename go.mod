@@ -1,4 +1,4 @@
-module github.com/nd-tools/capyvel/v2
+module github.com/nd-tools/capyvel
 
 go 1.23
 
