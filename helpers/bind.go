@@ -70,8 +70,8 @@ type ConfigJson struct {
 
 // ConfigUrl represents the configuration for URLs with parameters.
 type ConfigUrl struct {
-	Uris   interface{}
-	Params interface{}
+	UriParams   interface{}
+	QueryParams interface{}
 }
 
 // FileData represents the data for each file.
@@ -99,13 +99,13 @@ type ConfigFormData struct {
 
 // Url handles binding of URI and query parameters.
 func (b *Bind) Url(ctx *gin.Context, config ConfigUrl) error {
-	if config.Uris != nil {
-		if err := ctx.ShouldBindUri(config.Uris); err != nil {
+	if config.UriParams != nil {
+		if err := ctx.ShouldBindUri(config.UriParams); err != nil {
 			return err
 		}
 	}
-	if config.Params != nil {
-		if err := ctx.ShouldBindQuery(config.Params); err != nil {
+	if config.QueryParams != nil {
+		if err := ctx.ShouldBindQuery(config.QueryParams); err != nil {
 			return err
 		}
 	}
