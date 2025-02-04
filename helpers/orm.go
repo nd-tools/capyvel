@@ -146,7 +146,7 @@ func (orm *Orm) Add(ctx *gin.Context, obj any, config AddConfig) (*responses.Api
 // Get retrieves a record from the database
 func (orm *Orm) Get(ctx *gin.Context, obj any, config GetConfig) (*responses.Api, *responses.Error) {
 	var param OrmParams
-	if err := orm.bind.Url(ctx, ConfigUrl{Params: &param}); err != nil {
+	if err := orm.bind.Url(ctx, ConfigUrl{QueryParams: &param}); err != nil {
 		return nil, &responses.Error{
 			ErrorDetail: responses.ErrorDetail{
 				Message: "error obtaining query params",
@@ -389,7 +389,7 @@ func (orm *Orm) Delete(ctx *gin.Context, obj any, config DeleteConfig) (*respons
 func (orm *Orm) List(ctx *gin.Context, obj any, config ListConfig) (*responses.Api, *responses.Error) {
 	var param OrmParams
 	var err error
-	if err := orm.bind.Url(ctx, ConfigUrl{Params: &param}); err != nil {
+	if err := orm.bind.Url(ctx, ConfigUrl{QueryParams: &param}); err != nil {
 		return nil, &responses.Error{
 			ErrorDetail: responses.ErrorDetail{
 				Message: "error obtaining query params",
