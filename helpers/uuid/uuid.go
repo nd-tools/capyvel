@@ -35,6 +35,18 @@ func FromString(uuidStr string) (*UUID, error) {
 	return uid, nil
 }
 
+// StringToUUID converts a string to a UUID.
+// It returns nil for an empty or default UUID.
+func StringToUUID(uuidStr string) *UUID {
+	if uuidStr == "" || uuidStr == "00000000-0000-0000-0000-000000000000" {
+		return nil
+	}
+	parsedUUID, _ := uuid.Parse(uuidStr) // Ignoramos el error
+	uid := New()
+	copy((*uid)[:], parsedUUID[:])
+	return uid
+}
+
 // IsValid checks if the given string is a valid UUID.
 func IsValid(uuidStr string) error {
 	if uuidStr == "" {

@@ -97,6 +97,7 @@ func Boot() {
 	// Enable recovery middleware in debug mode
 	if debug, ok := foundation.App.Config.Get("app.debug", true).(bool); ok && debug {
 		router.Use(gin.Recovery())
+		router.Use(gin.Logger())
 	} else if !ok {
 		color.Redln(ErrMissingOrInvalidDebugConfig)
 		os.Exit(1)
@@ -134,34 +135,8 @@ func Boot() {
 
 	router.Use(cors.New(config))
 
-	// Add a logger middleware to log incoming requests
-	router.Use(requestLoggerMiddleware())
-
 	RouterManager.engine = router
 	RouterManager.defaultRoute = RouterManager.engine.Group(DefaultGroupPath)
-}
-
-// requestLoggerMiddleware logs all incoming requests with method, path, and timestamp
-func requestLoggerMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		start := time.Now()
-		path := c.Request.URL.Path
-		method := c.Request.Method
-
-		// Process the request
-		c.Next()
-
-		// Log the request details
-		duration := time.Since(start)
-		statusCode := c.Writer.Status()
-		fmt.Printf("[%s] %s %s %d %s\n",
-			start.Format("2006-01-02 15:04:05"),
-			method,
-			path,
-			statusCode,
-			duration,
-		)
-	}
 }
 
 // RegisterDefaultsMiddlewares registers a list of default middlewares.
