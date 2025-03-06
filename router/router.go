@@ -96,8 +96,8 @@ func Boot() {
 
 	// Enable recovery middleware in debug mode
 	if debug, ok := foundation.App.Config.Get("app.debug", true).(bool); ok && debug {
-		router.Use(gin.Recovery())
 		router.Use(gin.Logger())
+		router.Use(gin.Recovery())
 	} else if !ok {
 		color.Redln(ErrMissingOrInvalidDebugConfig)
 		os.Exit(1)
