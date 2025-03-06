@@ -1,12 +1,12 @@
-# ND Project - Your Project Name
+# CAPYVEL Project
 
-Welcome to the **ND** project. This repository contains the source code and documentation for the project.
+Welcome to the **CAPYVEL** project. This repository contains the source code and documentation for the project.
 
 ## Versions
 
 This project follows a version control scheme based on **Semantic Versioning** (SemVer).
 
-### Latest Version: v1.0
+### Latest Version: v1.1
 
 #### Changes in this version:
 - Initial stable version of the project.
