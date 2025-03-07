@@ -75,7 +75,7 @@ func IsValidInt(id string) error {
 // It returns the corresponding bool value and an error if the input is invalid.
 func IsValidBool(str string) (bool, error) {
 	// Normalize the input to be case-insensitive
-	normalizedStr := CleanText(strings.ToLower(str))
+	normalizedStr := strings.ToLower(str)
 	// Check if the string is "true" or "false"
 	if normalizedStr == "true" {
 		return true, nil
