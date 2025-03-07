@@ -74,15 +74,12 @@ func IsValidInt(id string) error {
 // IsValidBool checks if the given string is a valid boolean value ("true" or "false").
 // It returns the corresponding bool value and an error if the input is invalid.
 func IsValidBool(str string) (bool, error) {
-	// Normalize the input to be case-insensitive
 	normalizedStr := strings.ToLower(str)
-	// Check if the string is "true" or "false"
 	if normalizedStr == "true" {
 		return true, nil
 	} else if normalizedStr == "false" {
 		return false, nil
 	}
-	// Return an error if the input is not a valid boolean value
 	return false, errors.New("invalid boolean value, must be 'true' or 'false'")
 }
 
