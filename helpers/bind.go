@@ -64,6 +64,7 @@ type ConfigTag struct {
 // ConfigJson represents the configuration for JSON data.
 type ConfigJson struct {
 	Obj        interface{}
+	ObjFormat  interface{}
 	Mode       string
 	AutoFields *AutoFields
 }
@@ -113,15 +114,25 @@ func (b *Bind) Url(ctx *gin.Context, config ConfigUrl) error {
 }
 
 // Json handles binding of a JSON body to a given struct and query parameters and auto fields.
-func (b *Bind) Json(ctx *gin.Context, config ConfigJson, configUrl *ConfigUrl) error {
-	if err := ctx.ShouldBindJSON(config.Obj); err != nil {
-		return err
-	}
-	if configUrl != nil {
-		if err := b.Url(ctx, *configUrl); err != nil {
+func (b *Bind) Json(ctx *gin.Context, config ConfigJson) error {
+	if config.ObjFormat != nil {
+		if err := ctx.ShouldBindJSON(config.ObjFormat); err != nil {
+			return err
+		}
+		jsonData, err := json.MarshalIndent(config.ObjFormat, "", "  ")
+		if err != nil {
+			return err
+		}
+		err = json.Unmarshal(jsonData, config.Obj)
+		if err != nil {
+			return err
+		}
+	} else {
+		if err := ctx.ShouldBindJSON(config.Obj); err != nil {
 			return err
 		}
 	}
+
 	return b.handleAutoFields(ctx, config)
 }
 

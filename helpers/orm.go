@@ -88,7 +88,7 @@ type (
 // Add creates a new record in the database
 func (orm *Orm) Add(ctx *gin.Context, obj any, config AddConfig) (*responses.Api, *responses.Error) {
 	if !config.DisableBind {
-		if err := orm.bind.Json(ctx, ConfigJson{Obj: obj, Mode: config.BindMode}, nil); err != nil {
+		if err := orm.bind.Json(ctx, ConfigJson{Obj: obj, Mode: config.BindMode}); err != nil {
 			return nil, &responses.Error{
 				ErrorDetail: responses.ErrorDetail{
 					Message: "error reading declared model",
@@ -265,7 +265,7 @@ func (orm *Orm) Update(ctx *gin.Context, obj any, config UpdateConfig) (*respons
 		}
 	}
 	if !config.DisableBind {
-		if err := orm.bind.Json(ctx, ConfigJson{Obj: obj, Mode: config.BindMode}, nil); err != nil {
+		if err := orm.bind.Json(ctx, ConfigJson{Obj: obj, Mode: config.BindMode}); err != nil {
 			return nil, &responses.Error{
 				ErrorDetail: responses.ErrorDetail{
 					Message: "error reading declared model",
