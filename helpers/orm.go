@@ -292,17 +292,18 @@ func (orm *Orm) Update(ctx *gin.Context, obj any, config UpdateConfig) (*respons
 			}
 		}
 	}
-	if !config.WithAttach {
-		db = db.Omit(clause.Associations)
-	} else {
-		db = db.Session(&gorm.Session{FullSaveAssociations: true})
-	}
+
 	if config.BatchesSize > 0 {
 		db.CreateBatchSize = config.BatchesSize
 	} else {
 		db.CreateBatchSize = -1
 	}
-	if err := db.WithContext(ctx).Model(obj).Where(fieldInfo.Name+" = ?", fieldInfo.Value).Updates(obj).Error; err != nil {
+	if !config.WithAttach {
+		db = db.Omit(clause.Associations)
+	} else {
+		db = db.Session(&gorm.Session{FullSaveAssociations: true})
+	}
+	if err := db.WithContext(ctx).Model(obj).Where(fieldInfo.Name+" = ?", fieldInfo.Value).UpdateColumns(obj).Error; err != nil {
 		return nil, &responses.Error{
 			ErrorDetail: responses.ErrorDetail{
 				Message: "error updating object in the database",
