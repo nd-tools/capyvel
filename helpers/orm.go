@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"regexp"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -23,82 +24,116 @@ func NewOrm() *Orm {
 }
 
 // Orm is the main struct for ORM operations
+
 type Orm struct {
 	db   *gorm.DB
 	bind Bind
 }
 
 // FilterFunc defines a function type for filtering
+
 type FilterFunc func(ctx *gin.Context, db *gorm.DB) (*gorm.DB, error)
 
 // Configuration structs for various ORM operations
-type (
-	ListConfig struct {
-		Db                *gorm.DB
-		Limit             int
-		DefaultOrderBy    string
-		DefaultOrderDesc  bool
-		ScanObj           bool
-		DisablePagination bool
-		SearchFields      []structaudit.FieldInfo
-		OrderFields       []structaudit.FieldInfo
-		FilterFunctions   []FilterFunc
-	}
-	AddConfig struct {
-		Db          *gorm.DB
-		BindMode    string
-		WithAttach  bool
-		DisableBind bool
-		Batches     int
-		BatchesSize int
-	}
-	UpdateConfig struct {
-		Db                   *gorm.DB
-		BindMode             string
-		ColumnKey            string
-		KeyParam             string
-		BatchesSize          int
-		WithAttach           bool
-		DisableBind          bool
-		DisableValidationKey bool
-	}
-	DeleteConfig struct {
-		Db                   *gorm.DB
-		ColumnKey            string
-		KeyParam             string
-		SoftDelete           bool
-		DisableValidationKey bool
-	}
-	GetConfig struct {
-		Db                   *gorm.DB
-		ColumnKey            string
-		KeyParam             string
-		DisableRelations     bool
-		DisableValidationKey bool
-	}
-	OrmParams struct {
-		Search    string `form:"search,omitempty"`
-		OrderBy   string `form:"orderBy,omitempty"`
-		OrderDesc bool   `form:"orderDesc,omitempty"`
-		Page      int    `form:"page,omitempty"`
-		PageSize  int    `form:"pageSize,omitempty"`
-	}
+// Grouped related structs under a common type block
+
+// ListConfig represents the configuration for listing records.
+type ListConfig struct {
+	Db                *gorm.DB
+	Limit             int
+	DefaultOrderBy    string
+	DefaultOrderDesc  bool
+	ScanObj           bool
+	DisablePagination bool
+	SearchFields      []structaudit.FieldInfo
+	OrderFields       []structaudit.FieldInfo
+	FilterFunctions   []FilterFunc
+}
+
+// AddConfig represents the configuration for adding records.
+type AddConfig struct {
+	Db          *gorm.DB
+	ObjFormat   interface{}
+	BindMode    string
+	WithAttach  bool
+	DisableBind bool
+	BatchesSize int
+}
+
+// UpdateConfig represents the configuration for updating records.
+type UpdateConfig struct {
+	Db                   *gorm.DB
+	ObjFormat            interface{}
+	BindMode             string
+	ColumnKey            string
+	KeyParam             string
+	BatchesSize          int
+	WithAttach           bool
+	DisableBind          bool
+	DisableValidationKey bool // no safe
+}
+
+// DeleteConfig represents the configuration for deleting records.
+type DeleteConfig struct {
+	Db                   *gorm.DB
+	ColumnKey            string
+	KeyParam             string
+	SoftDelete           bool
+	DisableValidationKey bool // no safe
+}
+
+// GetConfig represents the configuration for retrieving a single record.
+type GetConfig struct {
+	Db                   *gorm.DB
+	ColumnKey            string
+	KeyParam             string
+	DisableRelations     bool
+	DisableValidationKey bool // no safe
+}
+
+// OrmParams represents common query parameters for various operations.
+type OrmParams struct {
+	Search    string `form:"search,omitempty"`
+	OrderBy   string `form:"orderBy,omitempty"`
+	OrderDesc bool   `form:"orderDesc,omitempty"`
+	Page      int    `form:"page,omitempty"`
+	PageSize  int    `form:"pageSize,omitempty"`
+}
+
+const (
+	DefaultKeyParam = "id"
+	// Errors
+	ErrReadingDeclaredModel      = "error reading declared model"
+	ErrCreatingObjectsInDB       = "error creating objects in the database"
+	ErrCreatingObjectInDB        = "error creating object in the database"
+	ErrNormalizingReceivedObject = "error normalizing received object"
+	ErrObtainingObjectInfo       = "error obtaining object information"
+	ErrValidatingIDParam         = "error validating ID parameter"
+	ErrFetchingObject            = "error fetching object"
+	ErrUpdatingObjectInDB        = "error updating object in the database"
+	ErrSoftDeletingObject        = "error performing soft delete on the object"
+	ErrHardDeletingObject        = "error performing hard delete on the object"
+	ErrObtainingQueryParams      = "error obtaining query parameters"
+	ErrParamsQuery               = "error in 'Params query'"
+	ErrCountingTotalRows         = "error counting total rows"
+	ErrScanningRecords           = "error scanning records"
+	ErrScanningModelRecords      = "error scanning model records"
 )
+
+// ErrorResponse is a reusable structure for consistent error handling
+func ErrorResponse(message string, err error, errType string, code int) *responses.Error {
+	return &responses.Error{
+		ErrorDetail: responses.ErrorDetail{
+			Message: message,
+			Error:   err,
+			Type:    errType,
+		},
+		Code: code,
+	}
+}
 
 // Add creates a new record in the database
 func (orm *Orm) Add(ctx *gin.Context, obj any, config AddConfig) (*responses.Api, *responses.Error) {
-	if !config.DisableBind {
-		if err := orm.bind.Json(ctx, ConfigJson{Obj: obj, Mode: config.BindMode}); err != nil {
-			return nil, &responses.Error{
-				ErrorDetail: responses.ErrorDetail{
-					Message: "error reading declared model",
-					Error:   err,
-					Type:    responses.TypeDB,
-				},
-				Code: http.StatusBadRequest,
-			}
-		}
-	}
 	db := config.Db
 	if db == nil {
 		db = orm.db
@@ -113,31 +148,22 @@ func (orm *Orm) Add(ctx *gin.Context, obj any, config AddConfig) (*responses.Api
 	} else {
 		db.CreateBatchSize = -1
 	}
+	if !config.DisableBind {
+		if err := orm.bind.Json(ctx, ConfigJson{Obj: obj, Mode: config.BindMode, ObjFormat: config.ObjFormat}); err != nil {
+			return nil, ErrorResponse(ErrReadingDeclaredModel, err, responses.TypeBind, http.StatusBadRequest)
+		}
+	}
 	if structaudit.GetObjectKind(obj) == reflect.Slice {
 		batches := 20
-		if config.Batches > 0 {
-			batches = config.Batches
+		if config.BatchesSize > 0 {
+			batches = config.BatchesSize
 		}
 		if err := db.WithContext(ctx).CreateInBatches(obj, batches).Error; err != nil {
-			return nil, &responses.Error{
-				ErrorDetail: responses.ErrorDetail{
-					Message: "error creating objects in the database",
-					Error:   err,
-					Type:    responses.TypeDB,
-				},
-				Code: http.StatusInternalServerError,
-			}
+			return nil, ErrorResponse(ErrCreatingObjectsInDB, err, responses.TypeDB, http.StatusInternalServerError)
 		}
 	} else {
 		if err := db.WithContext(ctx).Create(obj).Error; err != nil {
-			return nil, &responses.Error{
-				ErrorDetail: responses.ErrorDetail{
-					Message: "error creating object in the database",
-					Error:   err,
-					Type:    responses.TypeDB,
-				},
-				Code: http.StatusInternalServerError,
-			}
+			return nil, ErrorResponse(ErrCreatingObjectInDB, err, responses.TypeDB, http.StatusInternalServerError)
 		}
 	}
 	return &responses.Api{Data: obj}, nil
@@ -145,88 +171,49 @@ func (orm *Orm) Add(ctx *gin.Context, obj any, config AddConfig) (*responses.Api
 
 // Get retrieves a record from the database
 func (orm *Orm) Get(ctx *gin.Context, obj any, config GetConfig) (*responses.Api, *responses.Error) {
-	var param OrmParams
-	if err := orm.bind.Url(ctx, ConfigUrl{QueryParams: &param}); err != nil {
-		return nil, &responses.Error{
-			ErrorDetail: responses.ErrorDetail{
-				Message: "error obtaining query params",
-				Error:   err,
-				Type:    responses.TypeDB,
-			},
-			Code: http.StatusBadRequest,
-		}
-	}
-
 	db := config.Db
 	if db == nil {
 		db = orm.db
 	}
-
 	objType, err := structaudit.NormalizePointerType(obj)
 	if err != nil {
-		return nil, &responses.Error{
-			ErrorDetail: responses.ErrorDetail{
-				Message: "error normalizing received object",
-				Error:   err,
-				Type:    responses.TypeDB,
-			},
-			Code: http.StatusInternalServerError,
-		}
+		return nil, ErrorResponse(ErrNormalizingReceivedObject, err, responses.TypeUnknown, http.StatusInternalServerError)
 	}
 
 	var fieldInfo *structaudit.FieldInfo
 	if config.ColumnKey != "" {
 		f, err := structaudit.FindFieldInfoByName(objType, config.ColumnKey)
 		if err != nil {
-			return nil, &responses.Error{
-				ErrorDetail: responses.ErrorDetail{
-					Message: "error obtaining object information",
-					Error:   err,
-					Type:    responses.TypeDB,
-				},
-				Code: http.StatusInternalServerError,
-			}
+			return nil, ErrorResponse(ErrObtainingObjectInfo, err, responses.TypeUnknown, http.StatusInternalServerError)
 		}
 		fieldInfo = f
 	} else {
 		f, err := structaudit.FindFieldInfoByTag(objType, "gorm", "primaryKey")
 		if err != nil {
-			return nil, &responses.Error{
-				ErrorDetail: responses.ErrorDetail{
-					Message: "error obtaining object information",
-					Error:   err,
-					Type:    responses.TypeDB,
-				},
-				Code: http.StatusInternalServerError,
-			}
+			return nil, ErrorResponse(ErrObtainingObjectInfo, err, responses.TypeUnknown, http.StatusInternalServerError)
 		}
 		fieldInfo = f
 	}
-	if !config.DisableValidationKey {
-		keyParam := "id"
-		if config.KeyParam != "" {
-			keyParam = config.KeyParam
-		}
-		if err := structaudit.ValidateFieldData(fieldInfo, ctx.Param(keyParam)); err != nil {
-			return nil, &responses.Error{
-				ErrorDetail: responses.ErrorDetail{
-					Message: "error validating ID parameter",
-					Error:   err,
-					Type:    responses.TypeDB,
-				},
-				Code: http.StatusBadRequest,
-			}
-		}
+	keyParam := DefaultKeyParam
+	if config.KeyParam != "" {
+		keyParam = config.KeyParam
 	}
-	if err := db.WithContext(ctx).First(obj, fieldInfo.Name+" = ?", fieldInfo.Value).Error; err != nil {
-		return nil, &responses.Error{
-			ErrorDetail: responses.ErrorDetail{
-				Message: "error fetching object",
-				Error:   err,
-				Type:    responses.TypeDB,
-			},
-			Code: http.StatusInternalServerError,
+	var value interface{}
+	if !config.DisableValidationKey {
+		if err := structaudit.ValidateFieldData(fieldInfo, ctx.Param(keyParam)); err != nil {
+			return nil, ErrorResponse(ErrValidatingIDParam, err, responses.TypeBind, http.StatusBadRequest)
 		}
+		value = fieldInfo.Value
+	} else {
+		paramValue := ctx.Param(keyParam)
+		validPattern := regexp.MustCompile(`^[a-zA-Z0-9]+$`)
+		if !validPattern.MatchString(paramValue) {
+			return nil, ErrorResponse(ErrValidatingIDParam, err, responses.TypeBind, http.StatusBadRequest)
+		}
+		value = paramValue
+	}
+	if err := db.WithContext(ctx).First(obj, fieldInfo.Name+" = ?", value).Error; err != nil {
+		return nil, ErrorResponse(ErrFetchingObject, err, responses.TypeDB, http.StatusInternalServerError)
 	}
 
 	relations, _ := structaudit.ExtractFieldsByTag(objType, "gorm", "foreignKey")
@@ -242,57 +229,6 @@ func (orm *Orm) Update(ctx *gin.Context, obj any, config UpdateConfig) (*respons
 	if db == nil {
 		db = orm.db
 	}
-	objType, err := structaudit.NormalizePointerType(obj)
-	if err != nil {
-		return nil, &responses.Error{
-			ErrorDetail: responses.ErrorDetail{
-				Message: "error normalizing received object",
-				Error:   err,
-				Type:    responses.TypeDB,
-			},
-			Code: http.StatusInternalServerError,
-		}
-	}
-	fieldInfo, err := structaudit.FindFieldInfoByTag(objType, "gorm", "primaryKey")
-	if err != nil {
-		return nil, &responses.Error{
-			ErrorDetail: responses.ErrorDetail{
-				Message: "error finding primary key in the model",
-				Error:   err,
-				Type:    responses.TypeDB,
-			},
-			Code: http.StatusInternalServerError,
-		}
-	}
-	if !config.DisableBind {
-		if err := orm.bind.Json(ctx, ConfigJson{Obj: obj, Mode: config.BindMode}); err != nil {
-			return nil, &responses.Error{
-				ErrorDetail: responses.ErrorDetail{
-					Message: "error reading declared model",
-					Error:   err,
-					Type:    responses.TypeDB,
-				},
-				Code: http.StatusBadRequest,
-			}
-		}
-	}
-	if !config.DisableValidationKey {
-		keyParam := "id"
-		if config.KeyParam != "" {
-			keyParam = config.KeyParam
-		}
-		if err := structaudit.ValidateFieldData(fieldInfo, ctx.Param(keyParam)); err != nil {
-			return nil, &responses.Error{
-				ErrorDetail: responses.ErrorDetail{
-					Message: "error validating ID parameter",
-					Error:   err,
-					Type:    responses.TypeDB,
-				},
-				Code: http.StatusBadRequest,
-			}
-		}
-	}
-
 	if config.BatchesSize > 0 {
 		db.CreateBatchSize = config.BatchesSize
 	} else {
@@ -303,15 +239,49 @@ func (orm *Orm) Update(ctx *gin.Context, obj any, config UpdateConfig) (*respons
 	} else {
 		db = db.Session(&gorm.Session{FullSaveAssociations: true})
 	}
-	if err := db.WithContext(ctx).Model(obj).Where(fieldInfo.Name+" = ?", fieldInfo.Value).UpdateColumns(obj).Error; err != nil {
-		return nil, &responses.Error{
-			ErrorDetail: responses.ErrorDetail{
-				Message: "error updating object in the database",
-				Error:   err,
-				Type:    responses.TypeDB,
-			},
-			Code: http.StatusInternalServerError,
+	keyParam := DefaultKeyParam
+	if config.KeyParam != "" {
+		keyParam = config.KeyParam
+	}
+	objType, err := structaudit.NormalizePointerType(obj)
+	if err != nil {
+		return nil, ErrorResponse(ErrNormalizingReceivedObject, err, responses.TypeUnknown, http.StatusInternalServerError)
+	}
+	var fieldInfo *structaudit.FieldInfo
+	if config.ColumnKey != "" {
+		f, err := structaudit.FindFieldInfoByName(objType, config.ColumnKey)
+		if err != nil {
+			return nil, ErrorResponse(ErrObtainingObjectInfo, err, responses.TypeUnknown, http.StatusInternalServerError)
 		}
+		fieldInfo = f
+	} else {
+		f, err := structaudit.FindFieldInfoByTag(objType, "gorm", "primaryKey")
+		if err != nil {
+			return nil, ErrorResponse(ErrObtainingObjectInfo, err, responses.TypeUnknown, http.StatusInternalServerError)
+		}
+		fieldInfo = f
+	}
+	if !config.DisableBind {
+		if err := orm.bind.Json(ctx, ConfigJson{Obj: obj, ObjFormat: config.ObjFormat, Mode: config.BindMode}); err != nil {
+			return nil, ErrorResponse(ErrReadingDeclaredModel, err, responses.TypeBind, http.StatusBadRequest)
+		}
+	}
+	var value interface{}
+	if !config.DisableValidationKey {
+		if err := structaudit.ValidateFieldData(fieldInfo, ctx.Param(keyParam)); err != nil {
+			return nil, ErrorResponse(ErrValidatingIDParam, err, responses.TypeBind, http.StatusBadRequest)
+		}
+		value = fieldInfo.Value
+	} else {
+		paramValue := ctx.Param(keyParam)
+		validPattern := regexp.MustCompile(`^[a-zA-Z0-9]+$`)
+		if !validPattern.MatchString(paramValue) {
+			return nil, ErrorResponse(ErrValidatingIDParam, err, responses.TypeBind, http.StatusBadRequest)
+		}
+		value = paramValue
+	}
+	if err := db.WithContext(ctx).Model(obj).Where(fieldInfo.Name+" = ?", value).UpdateColumns(obj).Error; err != nil {
+		return nil, ErrorResponse(ErrUpdatingObjectInDB, err, responses.TypeDB, http.StatusInternalServerError)
 	}
 	return &responses.Api{Data: obj}, nil
 }
@@ -324,63 +294,48 @@ func (orm *Orm) Delete(ctx *gin.Context, obj any, config DeleteConfig) (*respons
 	}
 	objType, err := structaudit.NormalizePointerType(obj)
 	if err != nil {
-		return nil, &responses.Error{
-			ErrorDetail: responses.ErrorDetail{
-				Message: "error normalizing received object",
-				Error:   err,
-				Type:    responses.TypeDB,
-			},
-			Code: http.StatusInternalServerError,
-		}
+		return nil, ErrorResponse(ErrNormalizingReceivedObject, err, responses.TypeUnknown, http.StatusInternalServerError)
 	}
-	fieldInfo, err := structaudit.FindFieldInfoByTag(objType, "gorm", "primaryKey")
-	if err != nil {
-		return nil, &responses.Error{
-			ErrorDetail: responses.ErrorDetail{
-				Message: "error finding primary key in the model",
-				Error:   err,
-				Type:    responses.TypeDB,
-			},
-			Code: http.StatusInternalServerError,
+
+	var fieldInfo *structaudit.FieldInfo
+	if config.ColumnKey != "" {
+		f, err := structaudit.FindFieldInfoByName(objType, config.ColumnKey)
+		if err != nil {
+			return nil, ErrorResponse(ErrObtainingObjectInfo, err, responses.TypeUnknown, http.StatusInternalServerError)
 		}
+		fieldInfo = f
+	} else {
+		f, err := structaudit.FindFieldInfoByTag(objType, "gorm", "primaryKey")
+		if err != nil {
+			return nil, ErrorResponse(ErrObtainingObjectInfo, err, responses.TypeUnknown, http.StatusInternalServerError)
+		}
+		fieldInfo = f
 	}
+	keyParam := DefaultKeyParam
+	if config.KeyParam != "" {
+		keyParam = config.KeyParam
+	}
+	var value interface{}
 	if !config.DisableValidationKey {
-		keyParam := "id"
-		if config.KeyParam != "" {
-			keyParam = config.KeyParam
-		}
 		if err := structaudit.ValidateFieldData(fieldInfo, ctx.Param(keyParam)); err != nil {
-			return nil, &responses.Error{
-				ErrorDetail: responses.ErrorDetail{
-					Message: "error validating ID parameter",
-					Error:   err,
-					Type:    responses.TypeDB,
-				},
-				Code: http.StatusBadRequest,
-			}
+			return nil, ErrorResponse(ErrValidatingIDParam, err, responses.TypeBind, http.StatusBadRequest)
 		}
+		value = fieldInfo
+	} else {
+		paramValue := ctx.Param(keyParam)
+		validPattern := regexp.MustCompile(`^[a-zA-Z0-9]+$`)
+		if !validPattern.MatchString(paramValue) {
+			return nil, ErrorResponse(ErrValidatingIDParam, err, responses.TypeBind, http.StatusBadRequest)
+		}
+		value = paramValue
 	}
 	if config.SoftDelete {
-		if err := db.WithContext(ctx).Model(obj).Where(fieldInfo.Name+" = ?", fieldInfo.Value).Delete(obj).Error; err != nil {
-			return nil, &responses.Error{
-				ErrorDetail: responses.ErrorDetail{
-					Message: "error soft deleting object",
-					Error:   err,
-					Type:    responses.TypeDB,
-				},
-				Code: http.StatusInternalServerError,
-			}
+		if err := db.WithContext(ctx).Model(obj).Where(fieldInfo.Name+" = ?", value).Delete(obj).Error; err != nil {
+			return nil, ErrorResponse(ErrSoftDeletingObject, err, responses.TypeDB, http.StatusInternalServerError)
 		}
 	} else {
-		if err := db.WithContext(ctx).Unscoped().Where(fieldInfo.Name+" = ?", fieldInfo.Value).Delete(obj).Error; err != nil {
-			return nil, &responses.Error{
-				ErrorDetail: responses.ErrorDetail{
-					Message: "error hard deleting object",
-					Error:   err,
-					Type:    responses.TypeDB,
-				},
-				Code: http.StatusInternalServerError,
-			}
+		if err := db.WithContext(ctx).Unscoped().Where(fieldInfo.Name+" = ?", value).Delete(obj).Error; err != nil {
+			return nil, ErrorResponse(ErrHardDeletingObject, err, responses.TypeDB, http.StatusInternalServerError)
 		}
 	}
 	return &responses.Api{Data: obj}, nil
@@ -391,14 +346,7 @@ func (orm *Orm) List(ctx *gin.Context, obj any, config ListConfig) (*responses.A
 	var param OrmParams
 	var err error
 	if err := orm.bind.Url(ctx, ConfigUrl{QueryParams: &param}); err != nil {
-		return nil, &responses.Error{
-			ErrorDetail: responses.ErrorDetail{
-				Message: "error obtaining query params",
-				Error:   err,
-				Type:    responses.TypeDB,
-			},
-			Code: http.StatusBadRequest,
-		}
+		return nil, ErrorResponse(ErrParamsQuery, err, responses.TypeBind, http.StatusBadRequest)
 	}
 
 	db := config.Db
@@ -408,21 +356,14 @@ func (orm *Orm) List(ctx *gin.Context, obj any, config ListConfig) (*responses.A
 	for _, filterFunction := range config.FilterFunctions {
 		db, err = filterFunction(ctx, db)
 		if err != nil {
-			return nil, &responses.Error{ErrorDetail: responses.ErrorDetail{Message: "error en los 'Params query'", Error: err, Type: responses.TypeDB}, Code: http.StatusBadRequest}
+			return nil, ErrorResponse(ErrParamsQuery, err, responses.TypeBind, http.StatusBadRequest)
 		}
 	}
 
 	if config.SearchFields != nil {
 		db, err = ScopeSearch(db, config.SearchFields, param.Search)
 		if err != nil {
-			return nil, &responses.Error{
-				ErrorDetail: responses.ErrorDetail{
-					Message: "error en los 'Params query'",
-					Error:   err,
-					Type:    responses.TypeDB,
-				},
-				Code: http.StatusBadRequest,
-			}
+			return nil, ErrorResponse(ErrParamsQuery, err, responses.TypeBind, http.StatusBadRequest)
 		}
 	}
 	if !config.ScanObj {
@@ -430,14 +371,7 @@ func (orm *Orm) List(ctx *gin.Context, obj any, config ListConfig) (*responses.A
 	}
 	totalRows := int64(0)
 	if err := db.WithContext(ctx).Count(&totalRows).Error; err != nil {
-		return nil, &responses.Error{
-			ErrorDetail: responses.ErrorDetail{
-				Message: "error counting total rows",
-				Error:   err,
-				Type:    responses.TypeDB,
-			},
-			Code: http.StatusInternalServerError,
-		}
+		return nil, ErrorResponse(ErrCountingTotalRows, err, responses.TypeDB, http.StatusInternalServerError)
 	}
 
 	if config.DefaultOrderBy != "" {
@@ -457,14 +391,7 @@ func (orm *Orm) List(ctx *gin.Context, obj any, config ListConfig) (*responses.A
 	if config.OrderFields != nil {
 		db, err = ScopeOrder(db, config.OrderFields, param.OrderBy, param.OrderDesc)
 		if err != nil {
-			return nil, &responses.Error{
-				ErrorDetail: responses.ErrorDetail{
-					Message: "error en los 'Params query'",
-					Error:   err,
-					Type:    responses.TypeDB,
-				},
-				Code: http.StatusBadRequest,
-			}
+			return nil, ErrorResponse(ErrParamsQuery, err, responses.TypeBind, http.StatusBadRequest)
 		}
 	}
 
@@ -493,11 +420,11 @@ func (orm *Orm) List(ctx *gin.Context, obj any, config ListConfig) (*responses.A
 	}
 	if config.ScanObj {
 		if err := db.Scan(obj).Error; err != nil {
-			return nil, &responses.Error{ErrorDetail: responses.ErrorDetail{Message: "error al escanear los registros", Error: err, Type: responses.TypeDB}, Code: http.StatusBadRequest}
+			return nil, ErrorResponse(ErrScanningRecords, err, responses.TypeDB, http.StatusInternalServerError)
 		}
 	} else {
 		if err := db.Find(obj).Error; err != nil {
-			return nil, &responses.Error{ErrorDetail: responses.ErrorDetail{Message: "error al escanear el modelo de los registros", Error: err, Type: responses.TypeDB}, Code: http.StatusBadRequest}
+			return nil, ErrorResponse(ErrScanningModelRecords, err, responses.TypeDB, http.StatusInternalServerError)
 		}
 	}
 	baseURL := strings.TrimRight(ctx.Request.URL.Path, "/")
