@@ -320,7 +320,7 @@ func (orm *Orm) Delete(ctx *gin.Context, obj any, config DeleteConfig) (*respons
 		if err := structaudit.ValidateFieldData(fieldInfo, ctx.Param(keyParam)); err != nil {
 			return nil, ErrorResponse(ErrValidatingIDParam, err, responses.TypeBind, http.StatusBadRequest)
 		}
-		value = fieldInfo
+		value = fieldInfo.Value
 	} else {
 		paramValue := ctx.Param(keyParam)
 		validPattern := regexp.MustCompile(`^[a-zA-Z0-9]+$`)
