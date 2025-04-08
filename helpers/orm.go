@@ -101,6 +101,7 @@ type OrmParams struct {
 }
 
 const (
+	// Default Key {path}/:id
 	DefaultKeyParam = "id"
 	// Errors
 	ErrReadingDeclaredModel      = "error reading declared model"
