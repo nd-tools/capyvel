@@ -7,5 +7,5 @@ type Middleware interface {
 }
 
 type MiddlewarePermissions interface {
-	MiddlewarePermissions(ctx *gin.Context, permissions []string, requireAll bool) gin.HandlerFunc
+	MiddlewarePermissions(permissions []string, requireAll bool) gin.HandlerFunc
 }

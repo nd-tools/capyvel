@@ -231,7 +231,7 @@ func (router *Router) RegisterFunctions(option RouteOptions, optionsFunctions []
 		}
 		if len(optionFunction.RequiredPermissions) > 0 {
 			for _, middlewarePerm := range optionFunction.MiddlewaresPermissions {
-				middlewarePermisos := middlewarePerm.MiddlewarePermissions(nil, optionFunction.RequiredPermissions, optionFunction.RequireAllPermissions)
+				middlewarePermisos := middlewarePerm.MiddlewarePermissions(optionFunction.RequiredPermissions, optionFunction.RequireAllPermissions)
 				middlewares = append(middlewares, middlewarePermisos)
 			}
 		}
