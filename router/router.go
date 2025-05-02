@@ -66,6 +66,8 @@ type RouteOptionFunction struct {
 	HttpMethod                string                          // HTTP method (GET, POST, etc.)
 	Function                  func(*gin.Context)              // Function handler for the route
 	Middlewares               []middlewareContract.Middleware // Middlewares specific to this route
+	RequiredPermissions       []string                        // List of required permissions for the route
+	RequireAllPermissions     bool                            // Whether all permissions are required
 }
 
 // Boot initializes the router, CORS, and app configuration.
@@ -225,6 +227,12 @@ func (router *Router) RegisterFunctions(option RouteOptions, optionsFunctions []
 		}
 		for _, middleware := range optionFunction.Middlewares {
 			middlewares = append(middlewares, middleware.Middleware)
+		}
+		if len(optionFunction.RequiredPermissions) > 0 {
+			for _, middlewarePerm := range optionFunction.Middlewares {
+				middlewarePermisos := middlewarePerm.MiddlewarePermissions(nil, optionFunction.RequiredPermissions, optionFunction.RequireAllPermissions)
+				middlewares = append(middlewares, middlewarePermisos)
+			}
 		}
 		switch httpMethod {
 		case http.MethodGet:
