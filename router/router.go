@@ -61,13 +61,14 @@ type RouteOptions struct {
 
 // RouteOptionFunction defines a single function route configuration.
 type RouteOptionFunction struct {
-	PrefixName                string                          // Prefix for the route path
-	DontUseDefaultMiddlewares bool                            // Whether to skip default middlewares
-	HttpMethod                string                          // HTTP method (GET, POST, etc.)
-	Function                  func(*gin.Context)              // Function handler for the route
-	Middlewares               []middlewareContract.Middleware // Middlewares specific to this route
-	RequiredPermissions       []string                        // List of required permissions for the route
-	RequireAllPermissions     bool                            // Whether all permissions are required
+	PrefixName                string                                     // Prefix for the route path
+	DontUseDefaultMiddlewares bool                                       // Whether to skip default middlewares
+	HttpMethod                string                                     // HTTP method (GET, POST, etc.)
+	Function                  func(*gin.Context)                         // Function handler for the route
+	Middlewares               []middlewareContract.Middleware            // Middlewares specific to this route
+	MiddlewaresPermissions    []middlewareContract.MiddlewarePermissions // Middleware for permission checks
+	RequiredPermissions       []string                                   // List of required permissions for the route
+	RequireAllPermissions     bool                                       // Whether all permissions are required
 }
 
 // Boot initializes the router, CORS, and app configuration.
@@ -229,7 +230,7 @@ func (router *Router) RegisterFunctions(option RouteOptions, optionsFunctions []
 			middlewares = append(middlewares, middleware.Middleware)
 		}
 		if len(optionFunction.RequiredPermissions) > 0 {
-			for _, middlewarePerm := range optionFunction.Middlewares {
+			for _, middlewarePerm := range optionFunction.MiddlewaresPermissions {
 				middlewarePermisos := middlewarePerm.MiddlewarePermissions(nil, optionFunction.RequiredPermissions, optionFunction.RequireAllPermissions)
 				middlewares = append(middlewares, middlewarePermisos)
 			}
