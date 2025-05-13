@@ -124,42 +124,43 @@ func IntegerToEsEs(input int) string {
 		tens := triplet / 10 % 10
 		units := triplet % 10
 
+		tripletWords := []string{}
+
 		if hundreds > 0 {
-			words = append(words, spanishHundreds[hundreds])
+			tripletWords = append(tripletWords, spanishHundreds[hundreds])
 		}
 
 		if tens == 0 && units == 0 {
-
-			continue
-		}
-
-		switch tens {
-		case 0:
-
-			words = append(words, spanishUnits[units])
-		case 1:
-
-			words = append(words, spanishTeens[units])
-		case 2:
-
-			if units == 0 {
-				words = append(words, spanishTens[tens])
-			} else {
-				words = append(words, spanishTwenties[units])
-			}
-		default:
-
-			if units > 0 {
-				words = append(words, fmt.Sprintf("%s y %s", spanishTens[tens], spanishUnits[units]))
-			} else {
-				words = append(words, spanishTens[tens])
+			// solo centenas
+		} else {
+			switch tens {
+			case 0:
+				tripletWords = append(tripletWords, spanishUnits[units])
+			case 1:
+				tripletWords = append(tripletWords, spanishTeens[units])
+			case 2:
+				if units == 0 {
+					tripletWords = append(tripletWords, spanishTens[tens])
+				} else {
+					tripletWords = append(tripletWords, spanishTwenties[units])
+				}
+			default:
+				if units > 0 {
+					tripletWords = append(tripletWords, fmt.Sprintf("%s y %s", spanishTens[tens], spanishUnits[units]))
+				} else {
+					tripletWords = append(tripletWords, spanishTens[tens])
+				}
 			}
 		}
-
-		if idx > 0 {
-			mega := spanishMegasPlural[idx]
-			if mega != "" {
-				words = append(words, mega)
+		if idx == 1 && triplet == 1 {
+			words = append(words, "mil")
+		} else {
+			words = append(words, strings.Join(tripletWords, " "))
+			if idx > 0 {
+				mega := spanishMegasPlural[idx]
+				if mega != "" {
+					words = append(words, mega)
+				}
 			}
 		}
 	}
